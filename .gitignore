@@ -1,0 +1,17 @@
+# Build artifacts
+/target/
+
+# For libraries, do not commit Cargo.lock
+/Cargo.lock
+
+# Editors/OS
+/.idea/
+/.vscode/
+.DS_Store
+
+# Logs
+*.log
+
+# Dev internal docs (not for distribution)
+/plan.md
+/rust_rules.md

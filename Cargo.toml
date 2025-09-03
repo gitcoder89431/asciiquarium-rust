@@ -1,0 +1,14 @@
+[package]
+name = "asciiquarium-rust"
+version = "0.1.0"
+edition = "2021"
+description = "Asciiquarium widget and utilities for egui"
+# license = ""  # Set an appropriate license for your project if desired
+# repository = ""
+
+[lib]
+name = "asciiquarium_rust"
+path = "src/lib.rs"
+
+[dependencies]
+egui = "0.27"
