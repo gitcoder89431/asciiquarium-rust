@@ -94,6 +94,8 @@ pub struct AquariumEnvironment {
     pub next_ship_spawn: u64,
     pub next_shark_spawn: u64,
     pub next_whale_spawn: u64,
+    /// Next eligible tick to spawn a school of fish
+    pub next_school_spawn: u64,
 }
 
 impl Default for AquariumEnvironment {
@@ -108,6 +110,7 @@ impl Default for AquariumEnvironment {
             next_ship_spawn: 0,
             next_shark_spawn: 0,
             next_whale_spawn: 0,
+            next_school_spawn: 0,
         }
     }
 }
@@ -278,6 +281,46 @@ fn measure_block(art: &str) -> (usize, usize) {
     (w.max(1), h.max(1))
 }
 
+/// Mirror a single ASCII character to its horizontal counterpart.
+fn mirror_char(c: char) -> char {
+    match c {
+        '<' => '>',
+        '>' => '<',
+        '(' => ')',
+        ')' => '(',
+        '[' => ']',
+        ']' => '[',
+        '{' => '}',
+        '}' => '{',
+        '/' => '\\',
+        '\\' => '/',
+        // Characters that are symmetric or should remain unchanged by mirroring:
+        '-' | '_' | '|' | '`' | '\'' | '"' | '.' | ',' | ':' | ';' | '~' | '^' | 'o' | 'O'
+        | '0' => c,
+        _ => c,
+    }
+}
+
+/// Mirror an ASCII line: reverse order and swap mirrored pairs.
+fn mirror_ascii_line(s: &str) -> String {
+    s.chars().rev().map(mirror_char).collect()
+}
+
+/// Heuristic: decide if the art prefers facing right (more '>' than '<').
+/// If equal, default to right-facing.
+fn art_prefers_right(art: &str) -> bool {
+    let mut gt = 0usize;
+    let mut lt = 0usize;
+    for ch in art.chars() {
+        if ch == '>' {
+            gt += 1;
+        } else if ch == '<' {
+            lt += 1;
+        }
+    }
+    gt >= lt
+}
+
 fn ensure_environment_initialized(state: &mut AquariumState) {
     // Generate seaweed based on width if none present or if size changed significantly.
     let (w, h) = state.size;
@@ -388,6 +431,31 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
         };
         state.env.whales.push(Whale { x, y, vx });
     }
+    // Spawn a deterministic school of fish at intervals
+    if state.tick >= state.env.next_school_spawn && !assets.is_empty() {
+        let assets_len = assets.len();
+        let dir_right = (state.tick / 2400) % 2 == 0;
+        let count = 5 + ((state.tick as usize / 7) % 6); // 5..10
+        let mid = (state.size.1 / 2).max(6);
+        let y = mid.saturating_sub(2) + ((state.tick as usize / 11) % 4);
+        let speed = if dir_right { 8.0 } else { -8.0 };
+        let start_x = if dir_right {
+            -12.0
+        } else {
+            state.size.0 as f32 + 12.0
+        };
+        // Stagger fish along entry to keep tight school
+        for i in 0..count {
+            let art_idx = (i + ((state.tick as usize / 5) % assets_len)) % assets_len;
+            let xi = start_x - (i as f32) * 4.0;
+            state.fishes.push(FishInstance {
+                fish_art_index: art_idx,
+                position: (xi, y as f32),
+                velocity: (speed, 0.0),
+            });
+        }
+        state.env.next_school_spawn = state.tick + 1800; // ~60s at 30 fps
+    }
     for fish in &mut state.fishes {
         fish.position.0 += fish.velocity.0 * dt * fish_speed_mult;
         fish.position.1 += fish.velocity.1 * dt * fish_speed_mult;
@@ -402,20 +470,50 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
             .map(|a| (a.width as f32, a.height as f32))
             .unwrap_or((1.0, 1.0));
 
+        // Bounce on X.
         if fish.position.0 < 0.0 {
             fish.position.0 = 0.0;
             fish.velocity.0 = fish.velocity.0.abs();
+            // Small deterministic chance to flip vertical direction on wall bounce for natural variance.
+            let flip_seed =
+                ((state.tick) ^ ((fish.fish_art_index as u64) << 12) ^ 0x9E37_79B9_7F4A_7C15)
+                    .wrapping_mul(6364136223846793005);
+            if (flip_seed & 0x0F) == 0 {
+                fish.velocity.1 = -fish.velocity.1;
+            }
         } else if fish.position.0 + fw > aw {
             fish.position.0 = (aw - fw).max(0.0);
             fish.velocity.0 = -fish.velocity.0.abs();
+            // Small deterministic chance to flip vertical direction on wall bounce for natural variance.
+            let flip_seed =
+                ((state.tick) ^ ((fish.fish_art_index as u64) << 13) ^ 0x9E37_79B9_7F4A_7C15)
+                    .wrapping_mul(6364136223846793005);
+            if (flip_seed & 0x0F) == 0 {
+                fish.velocity.1 = -fish.velocity.1;
+            }
         }
 
+        // Bounce on Y.
         if fish.position.1 < 0.0 {
             fish.position.1 = 0.0;
             fish.velocity.1 = fish.velocity.1.abs();
+            // Small deterministic chance to flip horizontal direction on wall bounce for natural variance.
+            let flip_seed =
+                ((state.tick) ^ ((fish.fish_art_index as u64) << 14) ^ 0x9E37_79B9_7F4A_7C15)
+                    .wrapping_mul(6364136223846793005);
+            if (flip_seed & 0x0F) == 0 {
+                fish.velocity.0 = -fish.velocity.0;
+            }
         } else if fish.position.1 + fh > ah {
             fish.position.1 = (ah - fh).max(0.0);
             fish.velocity.1 = -fish.velocity.1.abs();
+            // Small deterministic chance to flip horizontal direction on wall bounce for natural variance.
+            let flip_seed =
+                ((state.tick) ^ ((fish.fish_art_index as u64) << 15) ^ 0x9E37_79B9_7F4A_7C15)
+                    .wrapping_mul(6364136223846793005);
+            if (flip_seed & 0x0F) == 0 {
+                fish.velocity.0 = -fish.velocity.0;
+            }
         }
     }
 
@@ -757,13 +855,23 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
         let x0 = fish.position.0.floor() as isize;
         let y0 = fish.position.1.floor() as isize;
 
-        for (dy, line) in art.art.lines().enumerate() {
+        let mirror = {
+            let prefers_right = art_prefers_right(art.art);
+            (fish.velocity.0 < 0.0 && prefers_right) || (fish.velocity.0 > 0.0 && !prefers_right)
+        };
+        for (dy, raw_line) in art.art.lines().enumerate() {
             let y = y0 + dy as isize;
             if y < 0 || y >= h as isize {
                 continue;
             }
 
-            for (dx, ch) in line.chars().enumerate() {
+            let line_str = if mirror {
+                mirror_ascii_line(raw_line)
+            } else {
+                raw_line.to_string()
+            };
+
+            for (dx, ch) in line_str.chars().enumerate() {
                 if ch == ' ' {
                     continue;
                 }
