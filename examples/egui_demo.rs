@@ -34,6 +34,7 @@ impl MyApp {
         let mut state = AquariumState {
             size,
             fishes: Vec::new(),
+            ..Default::default()
         };
 
         // Seed with a few random fish
