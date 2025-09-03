@@ -317,19 +317,55 @@ fn mirror_ascii_line(s: &str) -> String {
     s.chars().rev().map(mirror_char).collect()
 }
 
-/// Heuristic: decide if the art prefers facing right (more '>' than '<').
-/// If equal, default to right-facing.
+/// Heuristic: decide if the art prefers facing right.
+/// Uses a weighted score with multiple cues to reduce false “backwards” cases:
+/// - Count of '>' vs '<'
+/// - Right/left-facing substring cues (e.g., \"('>\", \"o>\", \"<')\", \"<o\")
+/// - Line-based cues (line ends with '>' or starts with '<')
+///   Defaults to right-facing when balanced.
 fn art_prefers_right(art: &str) -> bool {
-    let mut gt = 0usize;
-    let mut lt = 0usize;
+    // 1) Base score from arrow counts
+    let mut gt = 0i32;
+    let mut lt = 0i32;
     for ch in art.chars() {
-        if ch == '>' {
-            gt += 1;
-        } else if ch == '<' {
-            lt += 1;
+        match ch {
+            '>' => gt += 1,
+            '<' => lt += 1,
+            _ => {}
         }
     }
-    gt >= lt
+    let mut score = gt - lt;
+
+    // 2) Substring cues (weighted)
+    const RIGHT_CUES: [&str; 8] = ["('>", "o>", "0>", "))>", "]>", "}>", " )>", "/>"];
+    const LEFT_CUES: [&str; 8] = ["<')", "<o", "<0", "<((", "<[", "<{", "<) ", "<\\"];
+
+    let s = art;
+    for cue in RIGHT_CUES {
+        // weight +2 per match
+        score += 2 * s.matches(cue).count() as i32;
+    }
+    for cue in LEFT_CUES {
+        // weight -2 per match
+        score -= 2 * s.matches(cue).count() as i32;
+    }
+
+    // 3) Line-based cues: line ends with '>' => right, starts with '<' => left
+    for line in art.lines() {
+        let t = line.trim();
+        if t.is_empty() {
+            continue;
+        }
+        if t.ends_with('>') {
+            score += 1;
+        }
+        if t.starts_with('<') {
+            score -= 1;
+        }
+    }
+
+    // Default to right on tie for stability
+    score >= 0
 }
 
 fn ensure_environment_initialized(state: &mut AquariumState) {
