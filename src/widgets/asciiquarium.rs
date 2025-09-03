@@ -319,6 +319,7 @@ fn ensure_environment_initialized(state: &mut AquariumState) {
 /// Update the aquarium by one tick with simple wall-bounce physics and environment.
 pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     let (aw, ah) = (state.size.0 as f32, state.size.1 as f32);
+    let dt: f32 = 0.033;
 
     // Ensure environment exists.
     ensure_environment_initialized(state);
@@ -332,7 +333,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
         state.env.ships.push(Ship {
             x: -(sw as f32),
             y: 0,
-            vx: 1.0,
+            vx: 6.0,
         });
     }
     if state.env.sharks.is_empty() {
@@ -343,7 +344,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
         state.env.sharks.push(Shark {
             x: -40.0,
             y,
-            vx: 1.2,
+            vx: 8.0,
         });
     }
     if state.env.whales.is_empty() {
@@ -352,12 +353,12 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
         state.env.whales.push(Whale {
             x: state.size.0 as f32 + 10.0,
             y,
-            vx: -0.6,
+            vx: -4.0,
         });
     }
     for fish in &mut state.fishes {
-        fish.position.0 += fish.velocity.0;
-        fish.position.1 += fish.velocity.1;
+        fish.position.0 += fish.velocity.0 * dt;
+        fish.position.1 += fish.velocity.1 * dt;
 
         let (fw, fh) = assets
             .get(fish.fish_art_index)
@@ -398,7 +399,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
             };
             state.bubbles.push(Bubble {
                 position: (bx, mid_y),
-                velocity: (0.0, -0.3),
+                velocity: (0.0, -3.0),
             });
         }
     }
@@ -406,8 +407,8 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     // Update bubbles (rise) and cull above waterline (y < 0).
     let mut kept = Vec::with_capacity(state.bubbles.len());
     for mut b in state.bubbles.drain(..) {
-        b.position.0 += b.velocity.0;
-        b.position.1 += b.velocity.1;
+        b.position.0 += b.velocity.0 * dt;
+        b.position.1 += b.velocity.1 * dt;
         if b.position.1 >= 0.0 {
             kept.push(b);
         }
@@ -416,7 +417,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
 
     // Move ships.
     for ship in &mut state.env.ships {
-        ship.x += ship.vx;
+        ship.x += ship.vx * dt;
         let (sw, _) = if ship.vx >= 0.0 {
             measure_block(SHIP_R)
         } else {
@@ -431,7 +432,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
 
     // Move sharks.
     for shark in &mut state.env.sharks {
-        shark.x += shark.vx;
+        shark.x += shark.vx * dt;
         let (sw, _) = if shark.vx >= 0.0 {
             measure_block(SHARK_R)
         } else {
@@ -448,7 +449,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
 
     // Move whales.
     for whale in &mut state.env.whales {
-        whale.x += whale.vx;
+        whale.x += whale.vx * dt;
         let (ww, _) = if whale.vx >= 0.0 {
             measure_block(WHALE_R)
         } else {

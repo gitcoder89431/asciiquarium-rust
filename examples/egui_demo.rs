@@ -20,6 +20,7 @@ struct MyApp {
     assets: Vec<asciiquarium_rust::FishArt>,
     state: AquariumState,
     theme: AsciiquariumTheme,
+    // Controls repaint cadence (ms). Simulation uses an internal dt; higher values reduce CPU and may not linearly affect perceived speed.
     frame_ms: u64,
     bg_enabled: bool,
 }
@@ -52,7 +53,7 @@ impl MyApp {
             assets,
             state,
             theme,
-            frame_ms: 33,
+            frame_ms: 50,
             bg_enabled: true,
         }
     }
@@ -84,6 +85,8 @@ impl eframe::App for MyApp {
                 ui.separator();
 
                 ui.label("Frame (ms):");
+                ui.label(format!("{} ms", self.frame_ms));
+                ui.small("Render cadence; simulation uses fixed dt ~33ms");
                 if ui.button("-").clicked() && self.frame_ms > 5 {
                     self.frame_ms -= 2;
                 }
@@ -156,13 +159,13 @@ fn spawn_random_fish(state: &mut AquariumState, asset_count: usize) {
     let y = rng.gen_range(0..=max_y) as f32;
 
     // Random velocity with minimum magnitude to avoid stationary fish
-    let mut vx = rng.gen_range(-0.5_f32..=0.5_f32);
-    let mut vy = rng.gen_range(-0.25_f32..=0.25_f32);
-    if vx.abs() < 0.05 {
-        vx = if vx.is_sign_negative() { -0.08 } else { 0.08 };
+    let mut vx = rng.gen_range(-0.25_f32..=0.25_f32);
+    let mut vy = rng.gen_range(-0.12_f32..=0.12_f32);
+    if vx.abs() < 0.03 {
+        vx = if vx.is_sign_negative() { -0.04 } else { 0.04 };
     }
-    if vy.abs() < 0.02 {
-        vy = if vy.is_sign_negative() { -0.03 } else { 0.03 };
+    if vy.abs() < 0.012 {
+        vy = if vy.is_sign_negative() { -0.015 } else { 0.015 };
     }
 
     state.fishes.push(FishInstance {
