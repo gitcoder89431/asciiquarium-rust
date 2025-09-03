@@ -22,3 +22,4 @@ pub use widgets::asciiquarium::{
     AsciiquariumWidget, FishArt, FishInstance,
 };
 pub use widgets::asciiquarium_assets::{get_fish_assets, measure_art};
+pub use widgets::get_all_fish_assets;
