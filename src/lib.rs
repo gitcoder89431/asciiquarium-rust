@@ -8,8 +8,8 @@ Agent Log:
 
 Next steps for agents:
 - Ensure `src/widgets/mod.rs` declares:
-    pub mod asciiquarium;
-    pub mod asciiquarium_assets;
+  pub mod asciiquarium;
+  pub mod asciiquarium_assets;
 */
 
 #![forbid(unsafe_code)]

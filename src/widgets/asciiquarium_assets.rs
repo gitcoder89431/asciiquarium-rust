@@ -1,15 +1,21 @@
-use super::asciiquarium::FishArt;
+/*!
+Asciiquarium assets: a small curated set of ASCII fish plus a helper to auto-measure width and height for any multi-line ASCII art.
 
-/// Asciiquarium assets: a small curated set of ASCII fish plus a helper
-/// to auto-measure width and height for any multi-line ASCII art.
-///
-/// Notes:
-/// - Width is the maximum visible character count across all lines (Unicode scalar count).
-/// - Height is the total number of lines returned by `.lines()`.
-/// - Leading/trailing blank lines in raw strings will count toward height.
-/// - Rendering code will clip as needed; assets need not avoid whitespace.
-///
-/// These assets are intentionally simple; expand as desired with additional creatures.
+Notes:
+- Width is the maximum visible character count across all lines (Unicode scalar count).
+- Height is the total number of lines returned by `.lines()`.
+- Leading/trailing blank lines in raw strings will count toward height.
+- Rendering code will clip as needed; assets need not avoid whitespace.
+
+These assets are intentionally simple; expand as desired with additional creatures.
+
+Example:
+```text
+<º)))><
+```
+*/
+
+use super::asciiquarium::FishArt;
 
 const FISH_01: &str = r#"<º)))><"#; // Facing right
 const FISH_02: &str = r#"><(((º>"#; // Facing left
