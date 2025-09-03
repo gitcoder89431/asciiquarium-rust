@@ -15,7 +15,7 @@ Archived originals from the Perl-based Asciiquarium are kept under `archive/orig
 
     [dependencies]
     egui = "0.27"
-    asciiquarium_rust = { path = "." } # or from your git repo/registry
+    asciiquarium_rust = { git = "https://github.com/gitcoder89431/asciiquarium-rust", tag = "v0.1.0" }
 
 2) Prepare assets and state in your app:
 
