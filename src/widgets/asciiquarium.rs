@@ -12,6 +12,10 @@ Agent Log:
 
 use egui;
 
+const CLASSIC_BUBBLE_TICKS: u64 = 24;
+const CLASSIC_DT: f32 = 0.033;
+const CLASSIC_FISH_SPEED_MULT: f32 = 2.0;
+
 /// Visual asset for a fish (ASCII art and its measured dimensions).
 #[derive(Debug, Clone, Copy)]
 pub struct FishArt {
@@ -326,8 +330,8 @@ fn ensure_environment_initialized(state: &mut AquariumState) {
 /// Update the aquarium by one tick with simple wall-bounce physics and environment.
 pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     let (aw, ah) = (state.size.0 as f32, state.size.1 as f32);
-    let dt: f32 = 0.033;
-    let fish_speed_mult: f32 = 2.0;
+    let dt: f32 = CLASSIC_DT;
+    let fish_speed_mult: f32 = CLASSIC_FISH_SPEED_MULT;
 
     // Ensure environment exists.
     ensure_environment_initialized(state);
@@ -413,7 +417,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     // Occasionally emit bubbles from fish mouths, deterministically based on tick.
     // Emit every 24 ticks per fish to avoid randomness in the core crate.
     for fish in &state.fishes {
-        if state.tick % 72 == 0 {
+        if state.tick % CLASSIC_BUBBLE_TICKS == 0 {
             let (fw, fh) = assets
                 .get(fish.fish_art_index)
                 .map(|a| (a.width as f32, a.height as f32))
