@@ -158,14 +158,13 @@ fn spawn_random_fish(state: &mut AquariumState, asset_count: usize) {
     let x = rng.gen_range(0..=max_x) as f32;
     let y = rng.gen_range(0..=max_y) as f32;
 
-    // Random velocity with minimum magnitude to avoid stationary fish
-    let mut vx = rng.gen_range(-0.25_f32..=0.25_f32);
-    let mut vy = rng.gen_range(-0.12_f32..=0.12_f32);
-    if vx.abs() < 0.03 {
-        vx = if vx.is_sign_negative() { -0.04 } else { 0.04 };
-    }
-    if vy.abs() < 0.012 {
-        vy = if vy.is_sign_negative() { -0.015 } else { 0.015 };
+    // Classic Asciiquarium pacing: horizontal speed 2.5..22.5 cps, minimal vertical drift
+    let speed = rng.gen_range(2.5_f32..=22.5_f32);
+    let dir = if rng.gen_bool(0.5) { -1.0 } else { 1.0 };
+    let vx = dir * speed;
+    let mut vy = rng.gen_range(-0.6_f32..=0.6_f32);
+    if vy.abs() < 0.05 {
+        vy = 0.0;
     }
 
     state.fishes.push(FishInstance {

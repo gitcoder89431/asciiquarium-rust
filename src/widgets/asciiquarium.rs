@@ -86,6 +86,10 @@ pub struct AquariumEnvironment {
     pub sharks: Vec<Shark>,
     /// Underwater whales.
     pub whales: Vec<Whale>,
+    /// Next eligible tick to spawn a ship/shark/whale when none present.
+    pub next_ship_spawn: u64,
+    pub next_shark_spawn: u64,
+    pub next_whale_spawn: u64,
 }
 
 impl Default for AquariumEnvironment {
@@ -97,6 +101,9 @@ impl Default for AquariumEnvironment {
             ships: Vec::new(),
             sharks: Vec::new(),
             whales: Vec::new(),
+            next_ship_spawn: 0,
+            next_shark_spawn: 0,
+            next_whale_spawn: 0,
         }
     }
 }
@@ -320,45 +327,66 @@ fn ensure_environment_initialized(state: &mut AquariumState) {
 pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     let (aw, ah) = (state.size.0 as f32, state.size.1 as f32);
     let dt: f32 = 0.033;
+    let fish_speed_mult: f32 = 2.0;
 
     // Ensure environment exists.
     ensure_environment_initialized(state);
 
     // Integrate fish and handle bounce.
 
-    // Spawn default moving entities if none exist.
-    if state.env.ships.is_empty() {
-        // Start a ship just off the left edge moving right.
-        let (sw, _) = measure_block(SHIP_R);
-        state.env.ships.push(Ship {
-            x: -(sw as f32),
-            y: 0,
-            vx: 6.0,
-        });
+    // Spawn entities deterministically when none present and past next spawn tick.
+    if state.env.ships.is_empty() && state.tick >= state.env.next_ship_spawn {
+        // Alternate direction by epoch (simple deterministic scheme).
+        let right = (state.tick / 900) % 2 == 0;
+        let (sw, _) = if right {
+            measure_block(SHIP_R)
+        } else {
+            measure_block(SHIP_L)
+        };
+        let (x, vx) = if right {
+            (-(sw as f32), 6.0)
+        } else {
+            (state.size.0 as f32 + sw as f32, -6.0)
+        };
+        state.env.ships.push(Ship { x, y: 0, vx });
     }
-    if state.env.sharks.is_empty() {
-        // Place shark below waterlines.
+    if state.env.sharks.is_empty() && state.tick >= state.env.next_shark_spawn {
+        // Place shark at a consistent depth under waterlines.
         let (_, sh) = measure_block(SHARK_R);
         let base = 9;
         let y = state.size.1.saturating_sub(sh + 3).max(base);
-        state.env.sharks.push(Shark {
-            x: -40.0,
-            y,
-            vx: 8.0,
-        });
+        let right = (state.tick / 1200) % 2 == 0;
+        let (sw, _) = if right {
+            measure_block(SHARK_R)
+        } else {
+            measure_block(SHARK_L)
+        };
+        let (x, vx) = if right {
+            (-(sw as f32), 8.0)
+        } else {
+            (state.size.0 as f32 + sw as f32, -8.0)
+        };
+        state.env.sharks.push(Shark { x, y, vx });
     }
-    if state.env.whales.is_empty() {
-        // Place whale at mid-depth moving left.
+    if state.env.whales.is_empty() && state.tick >= state.env.next_whale_spawn {
+        // Mid-depth whale.
         let y = (state.size.1 / 3).max(6);
-        state.env.whales.push(Whale {
-            x: state.size.0 as f32 + 10.0,
-            y,
-            vx: -4.0,
-        });
+        let right = (state.tick / 1500) % 2 == 0;
+        let (ww, _) = if right {
+            measure_block(WHALE_R)
+        } else {
+            measure_block(WHALE_L)
+        };
+        let (x, vx) = if right {
+            (-(ww as f32), 4.0)
+        } else {
+            (state.size.0 as f32 + ww as f32, -4.0)
+        };
+        state.env.whales.push(Whale { x, y, vx });
     }
     for fish in &mut state.fishes {
-        fish.position.0 += fish.velocity.0 * dt;
-        fish.position.1 += fish.velocity.1 * dt;
+        fish.position.0 += fish.velocity.0 * dt * fish_speed_mult;
+        fish.position.1 += fish.velocity.1 * dt * fish_speed_mult;
 
         let (fw, fh) = assets
             .get(fish.fish_art_index)
@@ -385,7 +413,7 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     // Occasionally emit bubbles from fish mouths, deterministically based on tick.
     // Emit every 24 ticks per fish to avoid randomness in the core crate.
     for fish in &state.fishes {
-        if state.tick % 24 == 0 {
+        if state.tick % 72 == 0 {
             let (fw, fh) = assets
                 .get(fish.fish_art_index)
                 .map(|a| (a.width as f32, a.height as f32))
@@ -415,55 +443,70 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     }
     state.bubbles = kept;
 
-    // Move ships.
-    for ship in &mut state.env.ships {
+    // Move ships and despawn when fully off-screen. Schedule next spawn.
+    let mut next_ships = Vec::with_capacity(state.env.ships.len());
+    for mut ship in state.env.ships.drain(..) {
         ship.x += ship.vx * dt;
         let (sw, _) = if ship.vx >= 0.0 {
             measure_block(SHIP_R)
         } else {
             measure_block(SHIP_L)
         };
-        if ship.vx >= 0.0 && ship.x > state.size.0 as f32 {
-            ship.x = -(sw as f32);
-        } else if ship.vx < 0.0 && ship.x + sw as f32 <= 0.0 {
-            ship.x = state.size.0 as f32;
+        let off_right = ship.x > state.size.0 as f32;
+        let off_left = ship.x + sw as f32 <= 0.0;
+        if off_right || off_left {
+            // Next ship after ~20s
+            state.env.next_ship_spawn = state.tick + 600;
+        } else {
+            next_ships.push(ship);
         }
     }
+    state.env.ships = next_ships;
 
-    // Move sharks.
-    for shark in &mut state.env.sharks {
+    // Move sharks and despawn when fully off-screen. Schedule next spawn.
+    let mut next_sharks = Vec::with_capacity(state.env.sharks.len());
+    for mut shark in state.env.sharks.drain(..) {
         shark.x += shark.vx * dt;
         let (sw, _) = if shark.vx >= 0.0 {
             measure_block(SHARK_R)
         } else {
             measure_block(SHARK_L)
         };
-        if shark.vx >= 0.0 && shark.x > state.size.0 as f32 {
-            // Re-enter from left
-            shark.x = -(sw as f32);
-        } else if shark.vx < 0.0 && shark.x + sw as f32 <= 0.0 {
-            // Re-enter from right
-            shark.x = state.size.0 as f32;
+        let off_right = shark.x > state.size.0 as f32;
+        let off_left = shark.x + sw as f32 <= 0.0;
+        if off_right || off_left {
+            // Next shark after ~30s
+            state.env.next_shark_spawn = state.tick + 900;
+        } else {
+            next_sharks.push(shark);
         }
     }
+    state.env.sharks = next_sharks;
 
-    // Move whales.
-    for whale in &mut state.env.whales {
+    // Move whales and despawn when fully off-screen. Schedule next spawn.
+    let mut next_whales = Vec::with_capacity(state.env.whales.len());
+    for mut whale in state.env.whales.drain(..) {
         whale.x += whale.vx * dt;
         let (ww, _) = if whale.vx >= 0.0 {
             measure_block(WHALE_R)
         } else {
             measure_block(WHALE_L)
         };
-        if whale.vx >= 0.0 && whale.x > state.size.0 as f32 {
-            whale.x = -(ww as f32);
-        } else if whale.vx < 0.0 && whale.x + ww as f32 <= 0.0 {
-            whale.x = state.size.0 as f32;
+        let off_right = whale.x > state.size.0 as f32;
+        let off_left = whale.x + ww as f32 <= 0.0;
+        if off_right || off_left {
+            // Next whale after ~40s
+            state.env.next_whale_spawn = state.tick + 1200;
+        } else {
+            next_whales.push(whale);
         }
     }
+    state.env.whales = next_whales;
 
     // Advance environment phases.
-    state.env.water_phase = state.env.water_phase.wrapping_add(1);
+    if state.tick % 4 == 0 {
+        state.env.water_phase = state.env.water_phase.wrapping_add(1);
+    }
     state.tick = state.tick.wrapping_add(1);
 }
 
@@ -638,7 +681,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
             }
         }
         // Water spout above head (simple animation)
-        let frame = (state.tick as usize / 4) % SPOUT_FRAMES.len();
+        let frame = (state.tick as usize / 12) % SPOUT_FRAMES.len();
         let spout = SPOUT_FRAMES[frame];
         // Approximate blowhole position a bit right of whale x
         let spx = x0 + if whale.vx >= 0.0 { 8 } else { 3 };
