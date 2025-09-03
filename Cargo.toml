@@ -12,3 +12,7 @@ path = "src/lib.rs"
 
 [dependencies]
 egui = "0.27"
+
+[dev-dependencies]
+eframe = "0.27"
+rand = "0.8"
