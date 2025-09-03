@@ -160,3 +160,72 @@ Tests cover:
 - The original Perl Asciiquarium (Kirk Baucom) materials are archived under `archive/original/`.
 - This crate provides an `egui`-based Rust implementation with a stateless, themeable widget design.
 - ASCII art in this crate is a minimal starter set for demonstration. Expand or replace as needed per your project’s licensing requirements.
+
+## Features
+
+- Stateless egui widget: renders to a single monospace label string
+- Deterministic animation loop with fixed timestep for smooth pacing
+- Environment:
+  - Waterlines with subtle wave motion
+  - Seaweed with gentle sway
+  - Castle at bottom-right
+  - Ship at the surface; shark and whale underwater with spout animation
+  - Fish bubbles (desynced per fish)
+- Fish behavior:
+  - Bounce physics with occasional direction variance on wall bounces
+  - Schools: groups traverse and despawn off-screen
+  - Orientation correction: fish ASCII auto-mirrors so they face their travel direction
+- Despawn and respawn cycles for large entities (ship, shark, whale)
+- Minimal defaults, no required configuration
+- Tests and CI (rustfmt, clippy, build, test)
+
+## Colorized rendering (optional)
+
+By default, the widget renders a plain, single-color ASCII string. You can opt into a colorized renderer that maps certain glyphs to colors using a palette:
+
+- Enable by setting `enable_color = true` and providing a `palette`
+- Renders via an internal color `LayoutJob` while keeping the API unchanged
+- Glyph color mapping (initial pass):
+  - Water surface: `~` and `^` → `palette.water`
+  - Seaweed: `(` and `)` → `palette.seaweed`
+  - Bubbles: `.` → `palette.bubble`
+  - Original mask placeholders: `?` → `palette.water_trail` (to mimic motion trails)
+  - All other glyphs default to `theme.text_color` (castle, ship, fish body, etc.)
+
+Example (palette + colorized theme):
+
+    use asciiquarium_rust::{AsciiquariumTheme};
+    use asciiquarium_rust::widgets::asciiquarium::AsciiquariumPalette;
+
+    let palette = AsciiquariumPalette {
+        water: egui::Color32::from_rgb(120, 180, 255),
+        water_trail: egui::Color32::from_rgba_unmultiplied(120, 180, 255, 120),
+        seaweed: egui::Color32::from_rgb(60, 180, 120),
+        castle: egui::Color32::from_rgb(200, 200, 200),
+        ship: egui::Color32::from_rgb(230, 230, 230),
+        bubble: egui::Color32::from_rgb(200, 230, 255),
+        shark: egui::Color32::from_rgb(180, 200, 210),
+        whale: egui::Color32::from_rgb(160, 190, 210),
+        fish: egui::Color32::from_rgb(255, 200, 120),
+    };
+
+    let theme = AsciiquariumTheme {
+        text_color: egui::Color32::from_rgb(180, 220, 255),
+        background: Some(egui::Color32::from_rgb(8, 12, 16)),
+        wrap: false,
+        enable_color: true,
+        palette: Some(palette),
+    };
+
+Then render as usual with `AsciiquariumWidget { state, assets, theme }`.
+
+Notes:
+- Color mapping will evolve. Future iterations may introduce per-art or per-part mapping for higher fidelity while keeping defaults minimal.
+- When `enable_color = false` or `palette = None`, the widget falls back to plain text rendering.
+
+## Notes on original mask characters
+
+The classic Asciiquarium art uses special characters (like `?`) in separate color mask layers. In this crate:
+
+- With color disabled (default), mask characters are skipped in rendering for a clean monochrome output.
+- With color enabled, mask characters render using `palette.water_trail` to mimic subtle motion trails behind large entities.

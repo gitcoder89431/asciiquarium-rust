@@ -143,12 +143,29 @@ pub struct AquariumState {
 
 /// Theme passed during render. No hardcoded styles in the component.
 #[derive(Clone, Debug)]
+pub struct AsciiquariumPalette {
+    pub water: egui::Color32,
+    pub water_trail: egui::Color32,
+    pub seaweed: egui::Color32,
+    pub castle: egui::Color32,
+    pub ship: egui::Color32,
+    pub bubble: egui::Color32,
+    pub shark: egui::Color32,
+    pub whale: egui::Color32,
+    pub fish: egui::Color32,
+}
+
+#[derive(Clone, Debug)]
 pub struct AsciiquariumTheme {
     pub text_color: egui::Color32,
     /// Optional background fill for the label area.
     pub background: Option<egui::Color32>,
     /// Whether to wrap lines in the ASCII label. Usually false for grids.
     pub wrap: bool,
+    /// Enable colorized rendering using a LayoutJob instead of a plain string.
+    pub enable_color: bool,
+    /// Optional palette for colorized rendering. When None, falls back to text_color.
+    pub palette: Option<AsciiquariumPalette>,
 }
 
 impl Default for AsciiquariumTheme {
@@ -157,6 +174,8 @@ impl Default for AsciiquariumTheme {
             text_color: egui::Color32::LIGHT_GRAY,
             background: None,
             wrap: false,
+            enable_color: false,
+            palette: None,
         }
     }
 }
@@ -770,7 +789,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
                 continue;
             }
             for (dx, ch) in line.chars().enumerate() {
-                if ch == ' ' {
+                if ch == ' ' || ch == '?' {
                     continue;
                 }
                 let x = x0 + dx as isize;
@@ -793,7 +812,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
                 continue;
             }
             for (dx, ch) in line.chars().enumerate() {
-                if ch == ' ' {
+                if ch == ' ' || ch == '?' {
                     continue;
                 }
                 let x = base_x + dx;
@@ -866,7 +885,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
                 continue;
             }
             for (dx, ch) in line.chars().enumerate() {
-                if ch == ' ' {
+                if ch == ' ' || ch == '?' {
                     continue;
                 }
                 let x = x0 + dx as isize;
@@ -888,7 +907,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
                 continue;
             }
             for (dx, ch) in line.chars().enumerate() {
-                if ch == ' ' {
+                if ch == ' ' || ch == '?' {
                     continue;
                 }
                 let x = spx + dx as isize;
@@ -914,7 +933,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
                 continue;
             }
             for (dx, ch) in line.chars().enumerate() {
-                if ch == ' ' {
+                if ch == ' ' || ch == '?' {
                     continue;
                 }
                 let x = x0 + dx as isize;
@@ -952,7 +971,7 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
             };
 
             for (dx, ch) in line_str.chars().enumerate() {
-                if ch == ' ' {
+                if ch == ' ' || ch == '?' {
                     continue;
                 }
                 let x = x0 + dx as isize;
@@ -996,20 +1015,98 @@ pub struct AsciiquariumWidget<'a> {
 
 impl<'a> egui::Widget for AsciiquariumWidget<'a> {
     fn ui(self, ui: &mut egui::Ui) -> egui::Response {
-        let rendered = render_aquarium_to_string(self.state, self.assets);
-        let text = egui::RichText::new(rendered)
-            .monospace()
-            .color(self.theme.text_color);
-        let label = egui::Label::new(text).wrap(self.theme.wrap);
+        // Always render the ASCII grid string first
+        let rendered_string = render_aquarium_to_string(self.state, self.assets);
 
-        if let Some(fill) = self.theme.background {
-            egui::Frame::default()
-                .fill(fill)
-                .show(ui, |ui| ui.add(label))
-                .response
+        // If color is enabled and a palette is provided, build a colorized LayoutJob.
+        let response = if self.theme.enable_color {
+            if let Some(pal) = &self.theme.palette {
+                let mut job = egui::text::LayoutJob::default();
+                // Make sure this uses a monospace font
+                let mono = egui::FontId::monospace(12.0);
+
+                for (row_idx, line) in rendered_string.lines().enumerate() {
+                    for ch in line.chars() {
+                        let color = match ch {
+                            // Water surface
+                            '~' | '^' => pal.water,
+                            // Seaweed
+                            '(' | ')' => pal.seaweed,
+                            // Castle (fallback to text color; many different chars)
+                            // We leave castle to default unless specifically themed elsewhere.
+                            // Ship (same approach as castle)
+                            // Bubbles
+                            '.' => pal.bubble,
+                            // Mask placeholders from original assets: color as subtle water trail
+                            '?' => pal.water_trail,
+                            // Default fish and all other glyphs
+                            _ => self.theme.text_color,
+                        };
+                        job.append(
+                            &ch.to_string(),
+                            0.0,
+                            egui::TextFormat {
+                                font_id: mono.clone(),
+                                color,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                    if row_idx + 1 < self.state.size.1 {
+                        job.append(
+                            "\n",
+                            0.0,
+                            egui::TextFormat {
+                                font_id: mono.clone(),
+                                color: self.theme.text_color,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                }
+
+                let label =
+                    egui::Label::new(egui::WidgetText::LayoutJob(job)).wrap(self.theme.wrap);
+                if let Some(fill) = self.theme.background {
+                    egui::Frame::default()
+                        .fill(fill)
+                        .show(ui, |ui| ui.add(label))
+                        .response
+                } else {
+                    ui.add(label)
+                }
+            } else {
+                // Palette missing, fall back to plain text
+                let text = egui::RichText::new(rendered_string)
+                    .monospace()
+                    .color(self.theme.text_color);
+                let label = egui::Label::new(text).wrap(self.theme.wrap);
+                if let Some(fill) = self.theme.background {
+                    egui::Frame::default()
+                        .fill(fill)
+                        .show(ui, |ui| ui.add(label))
+                        .response
+                } else {
+                    ui.add(label)
+                }
+            }
         } else {
-            ui.add(label)
-        }
+            // Plain text path (default)
+            let text = egui::RichText::new(rendered_string)
+                .monospace()
+                .color(self.theme.text_color);
+            let label = egui::Label::new(text).wrap(self.theme.wrap);
+            if let Some(fill) = self.theme.background {
+                egui::Frame::default()
+                    .fill(fill)
+                    .show(ui, |ui| ui.add(label))
+                    .response
+            } else {
+                ui.add(label)
+            }
+        };
+
+        response
     }
 }
 

@@ -47,6 +47,8 @@ impl MyApp {
             text_color: egui::Color32::from_rgb(180, 220, 255),
             background: Some(egui::Color32::from_rgb(8, 12, 16)),
             wrap: false,
+            enable_color: false,
+            palette: None,
         };
 
         Self {
@@ -109,6 +111,56 @@ impl eframe::App for MyApp {
                     }
                 } else {
                     self.theme.background = None;
+                }
+
+                // Colorized rendering toggle and palette controls
+                ui.checkbox(&mut self.theme.enable_color, "Color");
+                if self.theme.enable_color {
+                    if self.theme.palette.is_none() {
+                        self.theme.palette = Some(
+                            asciiquarium_rust::widgets::asciiquarium::AsciiquariumPalette {
+                                water: egui::Color32::from_rgb(120, 180, 255),
+                                water_trail: egui::Color32::from_rgba_unmultiplied(
+                                    120, 180, 255, 120,
+                                ),
+                                seaweed: egui::Color32::from_rgb(60, 180, 120),
+                                castle: egui::Color32::from_rgb(200, 200, 200),
+                                ship: egui::Color32::from_rgb(230, 230, 230),
+                                bubble: egui::Color32::from_rgb(200, 230, 255),
+                                shark: egui::Color32::from_rgb(180, 200, 210),
+                                whale: egui::Color32::from_rgb(160, 190, 210),
+                                fish: egui::Color32::from_rgb(255, 200, 120),
+                            },
+                        );
+                    }
+                    if let Some(p) = &mut self.theme.palette {
+                        ui.separator();
+                        ui.label("Palette:");
+                        ui.horizontal(|ui| {
+                            ui.label("Water");
+                            ui.color_edit_button_srgba(&mut p.water);
+                            ui.label("Trail");
+                            ui.color_edit_button_srgba(&mut p.water_trail);
+                            ui.label("Seaweed");
+                            ui.color_edit_button_srgba(&mut p.seaweed);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Bubble");
+                            ui.color_edit_button_srgba(&mut p.bubble);
+                            ui.label("Fish");
+                            ui.color_edit_button_srgba(&mut p.fish);
+                            ui.label("Shark");
+                            ui.color_edit_button_srgba(&mut p.shark);
+                            ui.label("Whale");
+                            ui.color_edit_button_srgba(&mut p.whale);
+                        });
+                        ui.horizontal(|ui| {
+                            ui.label("Ship");
+                            ui.color_edit_button_srgba(&mut p.ship);
+                            ui.label("Castle");
+                            ui.color_edit_button_srgba(&mut p.castle);
+                        });
+                    }
                 }
 
                 ui.separator();
