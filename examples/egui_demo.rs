@@ -172,4 +172,7 @@ fn spawn_random_fish(state: &mut AquariumState, asset_count: usize) {
         position: (x, y),
         velocity: (vx, vy),
     });
+    state
+        .fish_behaviors
+        .push(asciiquarium_rust::widgets::asciiquarium::FishBehavior::Normal);
 }

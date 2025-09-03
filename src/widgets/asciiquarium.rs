@@ -115,6 +115,15 @@ impl Default for AquariumEnvironment {
     }
 }
 
+/// How a fish should behave within the aquarium.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FishBehavior {
+    /// Normal aquarium fish: bounces on edges and persists.
+    Normal,
+    /// Transit fish: swims straight across and despawns once fully off-screen.
+    Transit,
+}
+
 /// The aquarium state that the parent application owns and updates.
 #[derive(Debug, Default)]
 pub struct AquariumState {
@@ -122,6 +131,8 @@ pub struct AquariumState {
     pub size: (usize, usize),
     /// All fish currently in the aquarium.
     pub fishes: Vec<FishInstance>,
+    /// Behavior associated with each fish (parallel to `fishes`). Defaults to Normal.
+    pub fish_behaviors: Vec<FishBehavior>,
     /// Rising bubbles.
     pub bubbles: Vec<Bubble>,
     /// Background/props animation state.
@@ -379,6 +390,15 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     // Ensure environment exists.
     ensure_environment_initialized(state);
 
+    // Keep `fish_behaviors` in sync with `fishes` (pad with Normal, or truncate).
+    if state.fish_behaviors.len() < state.fishes.len() {
+        state
+            .fish_behaviors
+            .resize(state.fishes.len(), FishBehavior::Normal);
+    } else if state.fish_behaviors.len() > state.fishes.len() {
+        state.fish_behaviors.truncate(state.fishes.len());
+    }
+
     // Integrate fish and handle bounce.
 
     // Spawn entities deterministically when none present and past next spawn tick.
@@ -453,10 +473,17 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
                 position: (xi, y as f32),
                 velocity: (speed, 0.0),
             });
+            state.fish_behaviors.push(FishBehavior::Transit);
         }
         state.env.next_school_spawn = state.tick + 1800; // ~60s at 30 fps
     }
-    for fish in &mut state.fishes {
+    // Update fish with behavior-aware logic (Transit vs Normal).
+    let mut kept_fishes: Vec<FishInstance> = Vec::with_capacity(state.fishes.len());
+    let mut kept_behaviors: Vec<FishBehavior> = Vec::with_capacity(state.fish_behaviors.len());
+    for i in 0..state.fishes.len() {
+        let mut fish = state.fishes[i].clone();
+        let behavior = *state.fish_behaviors.get(i).unwrap_or(&FishBehavior::Normal);
+
         fish.position.0 += fish.velocity.0 * dt * fish_speed_mult;
         fish.position.1 += fish.velocity.1 * dt * fish_speed_mult;
         // Subtle deterministic horizontal jitter (does not mutate velocity)
@@ -470,7 +497,20 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
             .map(|a| (a.width as f32, a.height as f32))
             .unwrap_or((1.0, 1.0));
 
-        // Bounce on X.
+        if behavior == FishBehavior::Transit {
+            // Despawn transit fish once fully off-screen.
+            let off_right = fish.position.0 > aw;
+            let off_left = fish.position.0 + fw <= 0.0;
+            if off_right || off_left {
+                // drop (do not keep)
+            } else {
+                kept_fishes.push(fish);
+                kept_behaviors.push(behavior);
+            }
+            continue;
+        }
+
+        // Normal bounce behavior.
         if fish.position.0 < 0.0 {
             fish.position.0 = 0.0;
             fish.velocity.0 = fish.velocity.0.abs();
@@ -493,7 +533,6 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
             }
         }
 
-        // Bounce on Y.
         if fish.position.1 < 0.0 {
             fish.position.1 = 0.0;
             fish.velocity.1 = fish.velocity.1.abs();
@@ -515,7 +554,12 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
                 fish.velocity.0 = -fish.velocity.0;
             }
         }
+
+        kept_fishes.push(fish);
+        kept_behaviors.push(behavior);
     }
+    state.fishes = kept_fishes;
+    state.fish_behaviors = kept_behaviors;
 
     // Occasionally emit bubbles from fish mouths, deterministically based on tick.
     // Emit every 24 ticks per fish to avoid randomness in the core crate.
