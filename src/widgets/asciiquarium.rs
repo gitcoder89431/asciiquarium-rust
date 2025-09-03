@@ -277,16 +277,42 @@ fn ensure_environment_initialized(state: &mut AquariumState) {
     let target_count = (w / 15).max(1);
     if state.env.seaweed.len() != target_count {
         state.env.seaweed.clear();
-        // Evenly distribute stalks across width; deterministic heights.
-        for i in 0..target_count {
-            let x = ((i + 1) * w / (target_count + 1)).saturating_sub(1);
-            let height = 3 + (i % 4); // 3..6
+
+        // Deterministic seeded placement based on size (no external RNG).
+        let mut s: u64 = 0x9E37_79B9_7F4A_7C15u64 ^ ((w as u64) << 32) ^ (h as u64);
+
+        let mut xs: Vec<usize> = Vec::with_capacity(target_count);
+        for _ in 0..target_count {
+            // Advance seed and choose x in [1, w-2] when possible
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let mut x = 1 + (s as usize % w.saturating_sub(2).max(1));
+
+            // Avoid duplicates with a few retries
+            let mut retries = 0;
+            while xs.contains(&x) && retries < 4 {
+                s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+                x = 1 + (s as usize % w.saturating_sub(2).max(1));
+                retries += 1;
+            }
+            xs.push(x);
+
+            // Height 3..6
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let height = 3 + ((s as usize) % 4);
+
+            // Sway phase randomized but deterministic
+            s = s.wrapping_mul(6364136223846793005).wrapping_add(1);
+            let sway_phase = (s as u8) & 0x1F;
+
             state.env.seaweed.push(Seaweed {
                 x,
                 height,
-                sway_phase: (i as u8) * 7,
+                sway_phase,
             });
         }
+
+        // Sort by x for stable left-to-right rendering.
+        state.env.seaweed.sort_by_key(|s| s.x);
     }
 }
 
@@ -456,18 +482,44 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
 
     let mut grid = vec![' '; w * h];
 
-    // 1) Waterlines (top 4 rows), animated horizontal offset by water_phase.
-    for (i, pattern) in WATER_LINES.iter().enumerate() {
-        if i >= h {
-            break;
-        }
-        let chars: Vec<char> = pattern.chars().collect();
-        let plen = chars.len().max(1);
-        let offset = (state.env.water_phase as usize) % plen;
-        for x in 0..w {
-            let ch = chars[(x + offset) % plen];
-            let idx = i * w + x;
-            grid[idx] = ch;
+    // 1) Waterlines with per-column vertical offsets for wave dynamics.
+    let patterns: [Vec<char>; 4] = [
+        WATER_LINES[0].chars().collect(),
+        WATER_LINES[1].chars().collect(),
+        WATER_LINES[2].chars().collect(),
+        WATER_LINES[3].chars().collect(),
+    ];
+    let plens = [
+        patterns[0].len().max(1),
+        patterns[1].len().max(1),
+        patterns[2].len().max(1),
+        patterns[3].len().max(1),
+    ];
+
+    for x in 0..w {
+        // Triangular wave over columns with phase: 0 -> 1 -> 2 -> 1 repeating.
+        let t = (state.env.water_phase as usize + x) % 24;
+        let v_off: usize = if t < 6 {
+            0
+        } else if t < 12 {
+            1
+        } else if t < 18 {
+            2
+        } else {
+            1
+        };
+
+        for i in 0..4 {
+            if i >= h {
+                break;
+            }
+            let y = i + v_off;
+            if y >= h {
+                continue;
+            }
+            let off = (state.env.water_phase as usize) % plens[i];
+            let ch = patterns[i][(x + off) % plens[i]];
+            grid[y * w + x] = ch;
         }
     }
 
