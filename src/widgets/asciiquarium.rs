@@ -391,6 +391,11 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     for fish in &mut state.fishes {
         fish.position.0 += fish.velocity.0 * dt * fish_speed_mult;
         fish.position.1 += fish.velocity.1 * dt * fish_speed_mult;
+        // Subtle deterministic horizontal jitter (does not mutate velocity)
+        let jitter_seed = ((state.tick as u32).wrapping_mul(1103515245))
+            ^ (fish.fish_art_index as u32).wrapping_mul(12345);
+        let jitter = ((jitter_seed & 0x0F) as f32 - 8.0) * 0.002;
+        fish.position.0 += jitter;
 
         let (fw, fh) = assets
             .get(fish.fish_art_index)
@@ -416,8 +421,9 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
 
     // Occasionally emit bubbles from fish mouths, deterministically based on tick.
     // Emit every 24 ticks per fish to avoid randomness in the core crate.
-    for fish in &state.fishes {
-        if state.tick % CLASSIC_BUBBLE_TICKS == 0 {
+    for (i, fish) in state.fishes.iter().enumerate() {
+        // Desync bubble emission per fish using deterministic staggering
+        if (state.tick + ((i as u64 * 11) % CLASSIC_BUBBLE_TICKS)) % CLASSIC_BUBBLE_TICKS == 0 {
             let (fw, fh) = assets
                 .get(fish.fish_art_index)
                 .map(|a| (a.width as f32, a.height as f32))
@@ -574,7 +580,11 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
     // Render ships over waterlines near the surface.
     for ship in &state.env.ships {
         let x0 = ship.x.floor() as isize;
-        let y0 = ship.y as isize;
+        // Subtle vertical bob (amplitude 1) with slow phase
+        let phase_u = (state.tick / 64) % 2;
+        let phase_i = (x0.rem_euclid(2)) as u64;
+        let bob = if (phase_u + phase_i) % 2 == 0 { 0 } else { 1 };
+        let y0 = ship.y as isize + bob;
         let art = if ship.vx >= 0.0 { SHIP_R } else { SHIP_L };
         for (dy, line) in art.lines().enumerate() {
             let y = y0 + dy as isize;
@@ -665,7 +675,11 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
     // Render whales (with spout) and sharks under water.
     for whale in &state.env.whales {
         let x0 = whale.x.floor() as isize;
-        let y0 = whale.y as isize;
+        // Subtle vertical bob (amplitude 1) with slow phase
+        let phase_u = (state.tick / 96) % 2;
+        let phase_i = (x0.rem_euclid(2)) as u64;
+        let bob = if (phase_u + phase_i) % 2 == 0 { 0 } else { 1 };
+        let y0 = whale.y as isize + bob;
         let art = if whale.vx >= 0.0 { WHALE_R } else { WHALE_L };
         // Whale body
         for (dy, line) in art.lines().enumerate() {
@@ -710,7 +724,11 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
 
     for shark in &state.env.sharks {
         let x0 = shark.x.floor() as isize;
-        let y0 = shark.y as isize;
+        // Subtle vertical bob (amplitude 1) with slow phase
+        let phase_u = (state.tick / 80) % 2;
+        let phase_i = (x0.rem_euclid(2)) as u64;
+        let bob = if (phase_u + phase_i) % 2 == 0 { 0 } else { 1 };
+        let y0 = shark.y as isize + bob;
         let art = if shark.vx >= 0.0 { SHARK_R } else { SHARK_L };
         for (dy, line) in art.lines().enumerate() {
             let y = y0 + dy as isize;
