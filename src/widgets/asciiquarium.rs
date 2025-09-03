@@ -47,6 +47,30 @@ pub struct Seaweed {
     pub sway_phase: u8,
 }
 
+/// A surface ship moving along the waterline.
+#[derive(Debug, Clone)]
+pub struct Ship {
+    pub x: f32,
+    pub y: usize,
+    pub vx: f32,
+}
+
+/// A shark swimming under water.
+#[derive(Debug, Clone)]
+pub struct Shark {
+    pub x: f32,
+    pub y: usize,
+    pub vx: f32,
+}
+
+/// A whale swimming under water (with a spout animation).
+#[derive(Debug, Clone)]
+pub struct Whale {
+    pub x: f32,
+    pub y: usize,
+    pub vx: f32,
+}
+
 /// Environment effects and static props.
 #[derive(Debug, Clone)]
 pub struct AquariumEnvironment {
@@ -56,6 +80,12 @@ pub struct AquariumEnvironment {
     pub seaweed: Vec<Seaweed>,
     /// Whether to render the castle at bottom-right.
     pub castle: bool,
+    /// Surface ships.
+    pub ships: Vec<Ship>,
+    /// Underwater sharks.
+    pub sharks: Vec<Shark>,
+    /// Underwater whales.
+    pub whales: Vec<Whale>,
 }
 
 impl Default for AquariumEnvironment {
@@ -64,6 +94,9 @@ impl Default for AquariumEnvironment {
             water_phase: 0,
             seaweed: Vec::new(),
             castle: true,
+            ships: Vec::new(),
+            sharks: Vec::new(),
+            whales: Vec::new(),
         }
     }
 }
@@ -128,6 +161,102 @@ const CASTLE: &str = r#"
  |_______|__|_|_|_|__|_______|
 "#;
 
+// Ships (left/right)
+const SHIP_R: &str = r#"
+     |    |    |
+    )_)  )_)  )_)
+   )___))___))___)\
+  )____)____)_____)\\\
+_____|____|____|____\\\\\__
+\                   /
+"#;
+
+const SHIP_L: &str = r#"
+         |    |    |
+        (_(  (_(  (_(
+      /(___((___((___(
+    //(_____(____(____(
+__///____|____|____|_____
+    \                   /
+"#;
+
+// Sharks (left/right) - simplified large ASCII
+const SHARK_R: &str = r#"
+                              __
+                             ( `\
+  ,??????????????????????????)   `\
+;' `.????????????????????????(     `\__
+ ;   `.?????????????__..---''          `~~~~-._
+  `.   `.____...--''                       (b  `--._
+    >                     _.-'      .((      ._     )
+  .`.-`--...__         .-'     -.___.....-(|/|/|/|/'
+ ;.'?????????`. ...----`.___.',,,_______......---'
+ '???????????'-'
+"#;
+
+const SHARK_L: &str = r#"
+                     __
+                    /' )
+                  /'   (??????????????????????????,
+              __/'     )????????????????????????.' `;
+      _.-~~~~'          ``---..__?????????????.'   ;
+ _.--'  b)                       ``--...____.'   .'
+(     _.      )).      `-._                     <
+ `\|\|\|\|)-.....___.-     `-.         __...--'-.'.
+   `---......_______,,,`.___.'----... .'?????????`.;
+                                     `-`???????????`
+"#;
+
+// Whales (left/right)
+const WHALE_R: &str = r#"
+        .-----:
+      .'       `.
+,????/       (o) \
+\`._/          ,__)
+"#;
+
+const WHALE_L: &str = r#"
+    :-----.
+  .'       `.
+ / (o)       \????,
+(__,          \_.'/
+"#;
+
+// Water spout frames (small)
+const SPOUT_FRAMES: [&str; 7] = [
+    r#"
+
+   :
+"#,
+    r#"
+   :
+   :
+"#,
+    r#"
+  . .
+  -:-
+   :
+"#,
+    r#"
+  . .
+ .-:-.
+   :
+"#,
+    r#"
+  . .
+'.-:-.`
+'  :  '
+"#,
+    r#"
+ .- -.
+;  :  ;
+"#,
+    r#"
+
+;     ;
+"#,
+];
+
 fn measure_block(art: &str) -> (usize, usize) {
     let mut w = 0usize;
     let mut h = 0usize;
@@ -169,6 +298,37 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     ensure_environment_initialized(state);
 
     // Integrate fish and handle bounce.
+
+    // Spawn default moving entities if none exist.
+    if state.env.ships.is_empty() {
+        // Start a ship just off the left edge moving right.
+        let (sw, _) = measure_block(SHIP_R);
+        state.env.ships.push(Ship {
+            x: -(sw as f32),
+            y: 0,
+            vx: 1.0,
+        });
+    }
+    if state.env.sharks.is_empty() {
+        // Place shark below waterlines.
+        let (_, sh) = measure_block(SHARK_R);
+        let base = 9;
+        let y = state.size.1.saturating_sub(sh + 3).max(base);
+        state.env.sharks.push(Shark {
+            x: -40.0,
+            y,
+            vx: 1.2,
+        });
+    }
+    if state.env.whales.is_empty() {
+        // Place whale at mid-depth moving left.
+        let y = (state.size.1 / 3).max(6);
+        state.env.whales.push(Whale {
+            x: state.size.0 as f32 + 10.0,
+            y,
+            vx: -0.6,
+        });
+    }
     for fish in &mut state.fishes {
         fish.position.0 += fish.velocity.0;
         fish.position.1 += fish.velocity.1;
@@ -228,6 +388,53 @@ pub fn update_aquarium(state: &mut AquariumState, assets: &[FishArt]) {
     }
     state.bubbles = kept;
 
+    // Move ships.
+    for ship in &mut state.env.ships {
+        ship.x += ship.vx;
+        let (sw, _) = if ship.vx >= 0.0 {
+            measure_block(SHIP_R)
+        } else {
+            measure_block(SHIP_L)
+        };
+        if ship.vx >= 0.0 && ship.x > state.size.0 as f32 {
+            ship.x = -(sw as f32);
+        } else if ship.vx < 0.0 && ship.x + sw as f32 <= 0.0 {
+            ship.x = state.size.0 as f32;
+        }
+    }
+
+    // Move sharks.
+    for shark in &mut state.env.sharks {
+        shark.x += shark.vx;
+        let (sw, _) = if shark.vx >= 0.0 {
+            measure_block(SHARK_R)
+        } else {
+            measure_block(SHARK_L)
+        };
+        if shark.vx >= 0.0 && shark.x > state.size.0 as f32 {
+            // Re-enter from left
+            shark.x = -(sw as f32);
+        } else if shark.vx < 0.0 && shark.x + sw as f32 <= 0.0 {
+            // Re-enter from right
+            shark.x = state.size.0 as f32;
+        }
+    }
+
+    // Move whales.
+    for whale in &mut state.env.whales {
+        whale.x += whale.vx;
+        let (ww, _) = if whale.vx >= 0.0 {
+            measure_block(WHALE_R)
+        } else {
+            measure_block(WHALE_L)
+        };
+        if whale.vx >= 0.0 && whale.x > state.size.0 as f32 {
+            whale.x = -(ww as f32);
+        } else if whale.vx < 0.0 && whale.x + ww as f32 <= 0.0 {
+            whale.x = state.size.0 as f32;
+        }
+    }
+
     // Advance environment phases.
     state.env.water_phase = state.env.water_phase.wrapping_add(1);
     state.tick = state.tick.wrapping_add(1);
@@ -261,6 +468,29 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
             let ch = chars[(x + offset) % plen];
             let idx = i * w + x;
             grid[idx] = ch;
+        }
+    }
+
+    // Render ships over waterlines near the surface.
+    for ship in &state.env.ships {
+        let x0 = ship.x.floor() as isize;
+        let y0 = ship.y as isize;
+        let art = if ship.vx >= 0.0 { SHIP_R } else { SHIP_L };
+        for (dy, line) in art.lines().enumerate() {
+            let y = y0 + dy as isize;
+            if y < 0 || y >= h as isize {
+                continue;
+            }
+            for (dx, ch) in line.chars().enumerate() {
+                if ch == ' ' {
+                    continue;
+                }
+                let x = x0 + dx as isize;
+                if x < 0 || x >= w as isize {
+                    continue;
+                }
+                grid[y as usize * w + x as usize] = ch;
+            }
         }
     }
 
@@ -328,6 +558,74 @@ pub fn render_aquarium_to_string(state: &AquariumState, assets: &[FishArt]) -> S
                 } else {
                     grid[y * w + (x as usize)] = ')';
                 }
+            }
+        }
+    }
+
+    // Render whales (with spout) and sharks under water.
+    for whale in &state.env.whales {
+        let x0 = whale.x.floor() as isize;
+        let y0 = whale.y as isize;
+        let art = if whale.vx >= 0.0 { WHALE_R } else { WHALE_L };
+        // Whale body
+        for (dy, line) in art.lines().enumerate() {
+            let y = y0 + dy as isize;
+            if y < 0 || y >= h as isize {
+                continue;
+            }
+            for (dx, ch) in line.chars().enumerate() {
+                if ch == ' ' {
+                    continue;
+                }
+                let x = x0 + dx as isize;
+                if x < 0 || x >= w as isize {
+                    continue;
+                }
+                grid[y as usize * w + x as usize] = ch;
+            }
+        }
+        // Water spout above head (simple animation)
+        let frame = (state.tick as usize / 4) % SPOUT_FRAMES.len();
+        let spout = SPOUT_FRAMES[frame];
+        // Approximate blowhole position a bit right of whale x
+        let spx = x0 + if whale.vx >= 0.0 { 8 } else { 3 };
+        let spy = y0.saturating_sub(3);
+        for (dy, line) in spout.lines().enumerate() {
+            let y = spy + dy as isize;
+            if y < 0 || y >= h as isize {
+                continue;
+            }
+            for (dx, ch) in line.chars().enumerate() {
+                if ch == ' ' {
+                    continue;
+                }
+                let x = spx + dx as isize;
+                if x < 0 || x >= w as isize {
+                    continue;
+                }
+                grid[y as usize * w + x as usize] = ch;
+            }
+        }
+    }
+
+    for shark in &state.env.sharks {
+        let x0 = shark.x.floor() as isize;
+        let y0 = shark.y as isize;
+        let art = if shark.vx >= 0.0 { SHARK_R } else { SHARK_L };
+        for (dy, line) in art.lines().enumerate() {
+            let y = y0 + dy as isize;
+            if y < 0 || y >= h as isize {
+                continue;
+            }
+            for (dx, ch) in line.chars().enumerate() {
+                if ch == ' ' {
+                    continue;
+                }
+                let x = x0 + dx as isize;
+                if x < 0 || x >= w as isize {
+                    continue;
+                }
+                grid[y as usize * w + x as usize] = ch;
             }
         }
     }
