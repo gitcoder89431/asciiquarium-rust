@@ -8,17 +8,23 @@ use super::asciiquarium::FishArt;
 
 pub const FISH_0001: &str = "   \\\\\n  / \\\\\n>=_('>\n  \\\\_/\n   /";
 pub const FISH_0002: &str = "  /\n / \\\\\n<')_=<\n \\\\_/\n  \\\\";
-pub const FISH_0003: &str = "     ,\n     \\}\\\\\n\\\\  .'  `\\\\\n\\}\\}<   ( 6>\n/  `,  .'\n     \\}/\n     '";
-pub const FISH_0004: &str = "    ,\n   /\\{\n /'  `.  /\n<6 )   >\\{\\{\n `.  ,'  \\\\\n   \\\\\\{\n    `";
+pub const FISH_0003: &str =
+    "     ,\n     \\}\\\\\n\\\\  .'  `\\\\\n\\}\\}<   ( 6>\n/  `,  .'\n     \\}/\n     '";
+pub const FISH_0004: &str =
+    "    ,\n   /\\{\n /'  `.  /\n<6 )   >\\{\\{\n `.  ,'  \\\\\n   \\\\\\{\n    `";
 pub const FISH_0005: &str = "            \\\\'`.\n             )  \\\\\n(`.??????_.-`' ' '`-.\n \\\\ `.??.`        (o) \\\\_\n  >  ><     (((       (\n / .`??`._      /_|  /'\n(.`???????`-. _  _.-`\n            /__/'";
 pub const FISH_0006: &str = "       .'`/\n      /  (\n  .-'` ` `'-._??????.')\n_/ (o)        '.??.' /\n)       )))     ><  <\n`\\\\  |_\\\\      _.'??'. \\\\\n  '-._  _ .-'???????'.)\n      `\\\\__\\\\";
 pub const FISH_0007: &str = "       ,--,_\n__    _\\\\.---'-.\n\\\\ '.-\"     // o\\\\\n/_.'-._    \\\\\\\\  /\n       `\"--(/\"`";
-pub const FISH_0008: &str = "    _,--,\n .-'---./_    __\n/o \\\\\\\\     \"-.' /\n\\\\  //    _.-'._\\\\\n `\"\\\\)--\"`";
-pub const FISH_0009: &str = "       \\\n     ...\\..,\n\\  /'       \\\n >=     (  ' >\n/  \\      / /\n    `\"'\"'/''";
-pub const FISH_0010: &str = "      /\n  ,../...\n /       '\\  /\n< '  )     =<\n \\ \\      /  \\\n  `'\\'\"'\"'";
+pub const FISH_0008: &str =
+    "    _,--,\n .-'---./_    __\n/o \\\\\\\\     \"-.' /\n\\\\  //    _.-'._\\\\\n `\"\\\\)--\"`";
+pub const FISH_0009: &str =
+    "       \\\n     ...\\..,\n\\  /'       \\\n >=     (  ' >\n/  \\      / /\n    `\"'\"'/''";
+pub const FISH_0010: &str =
+    "      /\n  ,../...\n /       '\\  /\n< '  )     =<\n \\ \\      /  \\\n  `'\\'\"'\"'";
 pub const FISH_0011: &str = "    \\\n\\ /--\\\n>=  (o>\n/ \\__/\n    /";
 pub const FISH_0012: &str = "  /\n /--\\ /\n<o)  =<\n \\__/ \\\n  \\";
-pub const FISH_0013: &str = "       \\:.\n\\;,   ,;\\\\\\\\\\,,\n  \\\\\\\\\\;;:::::::o\n  ///;;::::::::<\n /;` ``/////``";
+pub const FISH_0013: &str =
+    "       \\:.\n\\;,   ,;\\\\\\\\\\,,\n  \\\\\\\\\\;;:::::::o\n  ///;;::::::::<\n /;` ``/////``";
 pub const FISH_0014: &str = "      .:/\n   ,,///;,   ,;/\n o:::::::;;///\n>::::::::;;\\\\\\\\\\\n  ''\\\\\\\\\\\\\\\\\\'' ';\\";
 pub const FISH_0015: &str = "  __\n><_'>\n   '";
 pub const FISH_0016: &str = " __\n<'_><\n `";
@@ -36,7 +42,9 @@ fn measure_art(art: &str) -> (usize, usize) {
     let mut h = 0usize;
     for line in art.lines() {
         let w = line.chars().count();
-        if w > max_w { max_w = w; }
+        if w > max_w {
+            max_w = w;
+        }
         h += 1;
     }
     (max_w.max(1), h.max(1))
@@ -45,34 +53,17 @@ fn measure_art(art: &str) -> (usize, usize) {
 pub fn get_generated_fish_assets() -> Vec<FishArt> {
     let mut out = Vec::new();
     let arts: &[&str] = &[
-        FISH_0001,
-        FISH_0002,
-        FISH_0003,
-        FISH_0004,
-        FISH_0005,
-        FISH_0006,
-        FISH_0007,
-        FISH_0008,
-        FISH_0009,
-        FISH_0010,
-        FISH_0011,
-        FISH_0012,
-        FISH_0013,
-        FISH_0014,
-        FISH_0015,
-        FISH_0016,
-        FISH_0017,
-        FISH_0018,
-        FISH_0019,
-        FISH_0020,
-        FISH_0021,
-        FISH_0022,
-        FISH_0023,
-        FISH_0024,
+        FISH_0001, FISH_0002, FISH_0003, FISH_0004, FISH_0005, FISH_0006, FISH_0007, FISH_0008,
+        FISH_0009, FISH_0010, FISH_0011, FISH_0012, FISH_0013, FISH_0014, FISH_0015, FISH_0016,
+        FISH_0017, FISH_0018, FISH_0019, FISH_0020, FISH_0021, FISH_0022, FISH_0023, FISH_0024,
     ];
     for art in arts {
         let (w, h) = measure_art(art);
-        out.push(FishArt { art, width: w, height: h });
+        out.push(FishArt {
+            art,
+            width: w,
+            height: h,
+        });
     }
     out
 }
